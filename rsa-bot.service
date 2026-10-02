@@ -1,0 +1,15 @@
+[Unit]
+Description=RSA driving test cancellation watcher
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/rsa-bot
+EnvironmentFile=/opt/rsa-bot/.env
+ExecStart=/usr/bin/node /opt/rsa-bot/src/index.js
+Restart=on-failure
+RestartSec=30
+User=rsa-bot
+
+[Install]
+WantedBy=multi-user.target

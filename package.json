@@ -1,0 +1,18 @@
+{
+  "name": "rsa-driving-test-bot",
+  "version": "1.0.0",
+  "description": "Personal automation to watch MyRoadSafety.ie for driving test cancellations and auto-book a matching slot",
+  "type": "module",
+  "main": "src/index.js",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "install-browsers": "playwright install chromium"
+  },
+  "dependencies": {
+    "playwright": "^1.47.0",
+    "dotenv": "^16.4.5"
+  }
+}
