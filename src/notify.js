@@ -52,3 +52,13 @@ export async function notifyBlocked(resumeAt) {
       `instead of retrying.\n\nNo action needed - it'll resume automatically.`
   );
 }
+
+export async function notifyLoginFailing(resumeAt, failureCount) {
+  await sendDiscordMessage(
+    `🔒 **Driving test bot: ${failureCount} login failures in a row, pausing**\n` +
+      `The saved session likely expired and a fresh login isn't getting through (SMS verification, or RSA ` +
+      `treating this host differently). Pausing login attempts until ${resumeAt.toISOString()} instead of ` +
+      `retrying every few minutes.\n\nRun \`npm run setup-session\` again and update SESSION_STATE_B64, then ` +
+      `redeploy to recover immediately instead of waiting.`
+  );
+}

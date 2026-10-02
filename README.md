@@ -118,11 +118,27 @@ back to the terminal and press Enter. It saves the logged-in session to
   Variables tab. On startup, `session.js` decodes it back into
   `session-state.json` if that file isn't already there.
 
-This stops working whenever RSA stops trusting the saved session (how
-long that lasts isn't predictable). When it happens, the bot detects it's
-back on `/home/2fa/login` and sends you a Discord alert instead of
-retrying forever - just rerun `npm run setup-session` and update
-`SESSION_STATE_B64`.
+In earlier testing, the saved session stopped working after under 2
+hours - the bot was launching a brand new browser from scratch every
+poll and throwing it away straight after, so there was never a live tab
+for RSA's app to silently refresh the way it would for a real user who
+just leaves the tab open. `src/index.js` now keeps one browser tab open
+and reuses it across polls instead (recycled every 6h for memory hygiene,
+but the saved session carries over that recycle) specifically to give
+that silent refresh a chance to happen. This might fix it outright, or
+RSA might cap the session at a fixed lifetime regardless of activity, in
+which case you're still stuck redoing `npm run setup-session`
+periodically - we won't know which until it's run for a few hours. Watch
+the Railway logs after deploying this to see how long it actually lasts.
+
+Either way, if the saved session does expire, the bot tries a fresh
+credentialed login; if that fails twice in a row (whether from hitting
+`/home/2fa/login` again, or anything else), it stops retrying every few
+minutes, sends one Discord alert, and backs off for 2 hours before trying
+again - instead of hammering RSA's login endpoint with your real
+credentials. Rerun `npm run setup-session` and update `SESSION_STATE_B64`
+any time you get that alert to recover immediately rather than waiting
+out the cooldown.
 
 ## 4. Test in alert-only mode first
 
