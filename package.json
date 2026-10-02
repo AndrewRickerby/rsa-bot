@@ -9,7 +9,8 @@
   },
   "scripts": {
     "start": "node src/index.js",
-    "install-browsers": "playwright install chromium"
+    "install-browsers": "playwright install chromium",
+    "setup-session": "node src/setupSession.mjs"
   },
   "dependencies": {
     "playwright": "^1.47.0",

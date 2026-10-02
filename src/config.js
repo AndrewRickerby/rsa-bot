@@ -1,17 +1,22 @@
+function parseList(value) {
+  if (!value) return [];
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 export const preferences = {
-  testCentres: [
-    "Finglas",
-    "Killester",
-  ],
+  testCentres: parseList(process.env.TEST_CENTRES),
 
-  earliestDate: "2026-10-13",
+  earliestDate: process.env.EARLIEST_DATE || "1970-01-01",
 
-  latestDate: "2027-01-31",
+  latestDate: process.env.LATEST_DATE || "9999-12-31",
 
-  allowedDaysOfWeek: [],
+  allowedDaysOfWeek: parseList(process.env.ALLOWED_DAYS_OF_WEEK).map(Number),
 
-  earliestTime: "08:00",
-  latestTime: "17:00",
+  earliestTime: process.env.EARLIEST_TIME || "00:00",
+  latestTime: process.env.LATEST_TIME || "23:59",
 };
 
 export const maxAutoBookings = 1;

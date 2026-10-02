@@ -25,9 +25,10 @@ MyRoadSafety currently shows this notice on the booking page:
 
 This is exactly the kind of tool that notice describes, so:
 
-- **Centre closure**: `src/config.js` uses `Killester` instead of `Raheny`,
-  since Raheny closes 2026-09-18 and applications move to Killester. Update
-  this yourself again if RSA changes the arrangement.
+- **Centre closure**: this project's own `.env` uses `Killester` instead
+  of `Raheny` in `TEST_CENTRES`, since Raheny closes 2026-09-18 and
+  applications move to Killester. Update your own `.env` again if RSA
+  changes the arrangement.
 - **No affiliation / at your own risk**: this project has nothing to do
   with RSA. It automates your own login the same way you would manually.
   Use it knowing they've explicitly disclaimed it.
@@ -39,40 +40,46 @@ This is exactly the kind of tool that notice describes, so:
 
 ## 1. Fill in the real selectors (do this first, nothing else will work otherwise)
 
-This is the only real work left. Playwright needs exact CSS selectors for:
+Login (`src/session.js`) is done and verified against the real site -
+RSA's login page is an Angular app behind a legal-warning modal and a
+cookie-consent banner, which `login()` dismisses before filling in
+`formcontrolname="userName"` / `formcontrolname="password"` and clicking
+the real `uid="no-parent-login-button"` submit button.
 
-- Login form: email field, password field, submit button (`src/session.js`)
-- Something that only appears once logged in, e.g. a nav link (`src/session.js`)
-- Test centre picker on the booking page (`src/slots.js`)
-- Each slot row + its date/time text (`src/slots.js`)
-- The click-to-select-slot action, confirm button, and success message (`src/book.js`)
+What's still a placeholder and needs to be filled in once you can see the
+real booking page (log in manually, then inspect it the same way - right
+click -> Inspect, look for a stable `id`/`name`/`data-testid`/`formcontrolname`
+rather than an auto-generated class like `css-1a2b3c`):
 
-How to find them:
-1. Log in to myroadsafety.rsa.ie normally in Chrome.
-2. Right-click the element in question -> Inspect.
-3. Look for a stable `id`, `name`, or `data-testid` attribute (avoid
-   auto-generated classes like `css-1a2b3c`, they change on every deploy).
-4. Swap the placeholder selector in the code for the real one.
-
-The placeholder selectors live in `login()` and `getBrowserContext()` in
-`src/session.js`, `fetchAvailableSlots()` in `src/slots.js`, and
-`bookSlot()` in `src/book.js` - every `page.locator(...)`,
-`page.fill(...)`, `page.click(...)`, and `page.selectOption(...)` call in
-those functions is a guess that needs to be checked against the real
-site.
+- Test centre picker on the booking page (`fetchAvailableSlots()` in
+  `src/slots.js`)
+- Each slot row + its date/time text (`fetchAvailableSlots()` in
+  `src/slots.js`)
+- The exact booking page URL (`BOOKING_URL` in `src/slots.js` currently
+  just points at the site root)
+- The click-to-select-slot action, confirm button, and success message
+  (`bookSlot()` in `src/book.js`)
 
 ## Configuring your preferences
 
-`src/config.js` controls which slots count as a match:
+These env vars (set in `.env`, or in Railway's Variables tab) control
+which slots count as a match. Leave any of them blank and it falls back
+to "everywhere" - no restriction on that field at all:
 
-- `testCentres`: exact centre names as they appear in the RSA site's
-  dropdown/list.
-- `earliestDate` / `latestDate`: inclusive date range, `YYYY-MM-DD`.
-- `allowedDaysOfWeek`: `0`-`6` (Sunday-Saturday); empty array allows any day.
-- `earliestTime` / `latestTime`: inclusive 24-hour range, `HH:MM`.
-- `maxAutoBookings`: how many slots the bot will auto-book in a single run
-  before it falls back to alert-only, so a bug can't book you into a pile
-  of tests.
+- `TEST_CENTRES`: comma-separated exact centre names as they appear in
+  the RSA site's dropdown/list, e.g. `Finglas,Killester`. Blank = check
+  every centre listed on the booking page.
+- `EARLIEST_DATE` / `LATEST_DATE`: inclusive date range, `YYYY-MM-DD`.
+  Blank = no limit on that end of the range.
+- `ALLOWED_DAYS_OF_WEEK`: comma-separated `0`-`6` (Sunday-Saturday), e.g.
+  `1,2,3,4,5` for weekdays only. Blank = any day.
+- `EARLIEST_TIME` / `LATEST_TIME`: inclusive 24-hour range, `HH:MM`.
+  Blank = no limit on that end of the range.
+
+`maxAutoBookings` in `src/config.js` is a separate safety limit (not a
+preference) - how many slots the bot will auto-book in a single run
+before it falls back to alert-only, so a bug can't book you into a pile
+of tests.
 
 ## 2. Install
 
@@ -88,7 +95,36 @@ server/channel you want alerts in -> Edit Channel -> Integrations ->
 Webhooks -> New Webhook -> Copy Webhook URL. Paste that into
 `DISCORD_WEBHOOK_URL` in `.env`.
 
-## 3. Test in alert-only mode first
+## 3. Handle RSA's SMS verification (do this before running unattended)
+
+RSA asks for an SMS code on login (`/home/2fa/login`), which an unattended
+bot obviously can't answer. The fix is to log in once yourself and let the
+bot reuse that authenticated session instead of logging in fresh every
+poll:
+
+```bash
+npm run setup-session
+```
+
+This opens a real (visible) browser with your `.env` credentials
+pre-filled. Click Login, complete the SMS step on your phone, then come
+back to the terminal and press Enter. It saves the logged-in session to
+`session-state.json` and prints a base64 blob.
+
+- **Running locally**: nothing else to do - `session-state.json` is
+  picked up automatically by `getBrowserContext()` in `src/session.js`.
+- **Running on Railway** (no screen to click through): paste the printed
+  base64 blob into the `SESSION_STATE_B64` variable in Railway's
+  Variables tab. On startup, `session.js` decodes it back into
+  `session-state.json` if that file isn't already there.
+
+This stops working whenever RSA stops trusting the saved session (how
+long that lasts isn't predictable). When it happens, the bot detects it's
+back on `/home/2fa/login` and sends you a Discord alert instead of
+retrying forever - just rerun `npm run setup-session` and update
+`SESSION_STATE_B64`.
+
+## 4. Test in alert-only mode first
 
 Leave `AUTO_BOOK_ENABLED=false` in `.env` and run:
 
@@ -100,14 +136,14 @@ Watch the console output and confirm it logs in successfully and reports
 slot counts. Fix selectors until this works cleanly before touching
 auto-booking.
 
-## 4. Turn on auto-booking
+## 5. Turn on auto-booking
 
 Once you're confident the scraping is accurate, set `AUTO_BOOK_ENABLED=true`.
 It will book at most one slot per run (`maxAutoBookings` in `src/config.js`)
 and then stop booking further ones automatically, just to keep a single bug
 from booking you into a pile of tests. Bump that number once you trust it.
 
-## 5. Deploy on Railway
+## 6. Deploy on Railway
 
 This repo includes a `Dockerfile` (Railway's default Nixpacks builder
 doesn't have the system libraries Chromium needs, so the Dockerfile
@@ -121,23 +157,27 @@ that tells Railway to build from it.
    `railway.json` and build the Dockerfile automatically.
 3. Open the service -> **Variables** tab and add everything from
    `.env.example` with your real values (`RSA_EMAIL`, `RSA_PASSWORD`,
-   `DISCORD_WEBHOOK_URL`, `POLL_MIN_SECONDS`, `POLL_MAX_SECONDS`,
-   `AUTO_BOOK_ENABLED`). Railway injects these as environment variables -
-   you don't need a `.env` file in the deployed container.
+   `DISCORD_WEBHOOK_URL`, `TEST_CENTRES`, `EARLIEST_DATE`, `LATEST_DATE`,
+   `ALLOWED_DAYS_OF_WEEK`, `EARLIEST_TIME`, `LATEST_TIME`,
+   `POLL_MIN_SECONDS`, `POLL_MAX_SECONDS`, `AUTO_BOOK_ENABLED`,
+   `SESSION_STATE_B64` from `npm run setup-session` - see step 3 above).
+   Railway injects these as environment variables - you don't need a
+   `.env` file in the deployed container.
 4. This is a background worker, not a web server, so you don't need to
    generate a public domain for it. Deploy, then check
    **Deployments -> View Logs** to confirm it logs in and starts polling.
 5. Leave `AUTO_BOOK_ENABLED=false` for your first deploy and watch the
    logs for a few poll cycles before switching it to `true`.
 
-**Session persistence note:** the bot saves `session-state.json` to the
-container's filesystem so it doesn't log in on every poll. That file
-survives restarts but is wiped on every new deploy, so each redeploy
-costs one extra login - not a problem on its own, just worth knowing.
-If you want it to persist across deploys too, add a
-[Railway Volume](https://docs.railway.app/reference/volumes) mounted at
-`/app` (or wherever you set `STORAGE_STATE_PATH` to point) for the
-service.
+**Session persistence note:** `session-state.json` is wiped on every new
+deploy (ephemeral container filesystem), but `session.js` re-creates it
+from `SESSION_STATE_B64` on startup if it's missing - so a redeploy just
+restores the same session instead of hitting RSA's login/2FA page again.
+This only breaks once RSA actually invalidates that saved session (see
+step 3), at which point you rerun `npm run setup-session` and update the
+variable. If you'd rather the file just persist across deploys instead,
+a [Railway Volume](https://docs.railway.app/reference/volumes) mounted
+at `/app` works too, but isn't necessary.
 
 **Option B - deploy without GitHub, via CLI:**
 
@@ -182,7 +222,10 @@ sudo journalctl -u rsa-bot -f   # watch logs
   stated block duration, since their Customer Care team can't lift it
   early and retrying sooner would just prolong it.
 - The session is saved to `session-state.json` after first login so the
-  bot isn't re-authenticating on every single poll.
+  bot isn't re-authenticating on every single poll. In practice this
+  matters even more than usual here, since RSA's 2FA means re-authenticating
+  isn't just slower, it's a wall the bot can't get past unattended - see
+  step 3.
 - This is almost certainly against RSA's terms of use even though
   several commercial apps do the same thing openly. Worst realistic case
   is your account gets rate-limited or temporarily locked, not anything

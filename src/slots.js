@@ -3,13 +3,22 @@ import { assertNotBlocked } from "./blockGuard.js";
 
 const BOOKING_URL = "https://myroadsafety.rsa.ie";
 
+async function getCentreNames(page) {
+  if (preferences.testCentres.length > 0) return preferences.testCentres;
+
+  return page
+    .locator('select[name="testCentre"] option')
+    .evaluateAll((opts) => opts.filter((opt) => opt.value).map((opt) => opt.textContent.trim()));
+}
+
 export async function fetchAvailableSlots(page) {
   const response = await page.goto(BOOKING_URL, { waitUntil: "networkidle" });
   await assertNotBlocked(page, response);
 
   const results = [];
+  const centres = await getCentreNames(page);
 
-  for (const centre of preferences.testCentres) {
+  for (const centre of centres) {
     await page.selectOption('select[name="testCentre"]', { label: centre }).catch(() => {});
     await page.waitForTimeout(800);
 
