@@ -6,9 +6,17 @@ const BOOKING_URL = "https://myroadsafety.rsa.ie";
 async function getCentreNames(page) {
   if (preferences.testCentres.length > 0) return preferences.testCentres;
 
-  return page
+  const names = await page
     .locator('select[name="testCentre"] option')
     .evaluateAll((opts) => opts.filter((opt) => opt.value).map((opt) => opt.textContent.trim()));
+
+  if (names.length === 0) {
+    console.warn(
+      `No test centres found on ${page.url()} (title: "${await page.title()}"). ` +
+        'The select[name="testCentre"] selector in src/slots.js probably does not match the live page.'
+    );
+  }
+  return names;
 }
 
 export async function fetchAvailableSlots(page) {
@@ -19,10 +27,13 @@ export async function fetchAvailableSlots(page) {
   const centres = await getCentreNames(page);
 
   for (const centre of centres) {
-    await page.selectOption('select[name="testCentre"]', { label: centre }).catch(() => {});
+    await page.selectOption('select[name="testCentre"]', { label: centre }).catch((err) => {
+      console.warn(`Could not select "${centre}" in the test centre picker: ${err.message.split("\n")[0]}`);
+    });
     await page.waitForTimeout(800);
 
     const rows = await page.locator(".slot-row").all();
+    console.log(`  ${centre}: ${rows.length} row(s) matched .slot-row`);
 
     for (const row of rows) {
       const dateText = await row.locator(".slot-date").innerText().catch(() => null);
